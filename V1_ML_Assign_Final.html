@@ -95,7 +95,7 @@ testClasse  &lt;- buildData[-inTrain,]  # Data for testing the model</code></pre
 </div>
 <div id="developing-three-different-models" class="section level2">
 <h2>Developing three different models</h2>
-<p>Using the training data three different models were created. Since the problem here is a classification problem with more than two classes to predict, the methods chosen were rpart, random forest, and lda as shown in the following R code. For the rpart model tuning length of 50 was used. For the random forest model, a cross-validation training control method was selected. For the list discriminant analysis (lda) model the default parameters of the caret package were used. The accuracy on the training set for the three different models were 90.6% (rpart), 98.47% (rf), and 68.54% (lda) respectively.</p>
+<p>Using the training data three different models were created. Since the problem here is a classification problem with more than two classes to predict, the methods chosen were rpart, random forest, and lda as shown in the following R code. For the rpart model tuning length of 50 was used. For the random forest model, a cross-validation training control method was selected. For the linear discriminant analysis (lda) model the default parameters of the caret package were used. The accuracy on the training set for the three different models were 90.6% (rpart), 98.47% (rf), and 68.54% (lda) respectively.</p>
 <pre class="r"><code>library(e1071)
 library(rpart)
 library(randomForest)</code></pre>
@@ -124,7 +124,7 @@ confusionMatrix(pred_lda, testClasse$classe)</code></pre>
 </div>
 <div id="checking-the-out-of-sample-error-rate" class="section level2">
 <h2>Checking the out-of-sample error rate</h2>
-<p>Next the three different models were checked against the validation data set to evaluate the out-of-sample error rate. Here also the random forest model proved to be the most accurate with an accuarcy of 98.8%. Since the models were trained with about 50% of the original training set, the expectation was that out-of-sample errors (on the validation data set) will be almost similar or worse than the test data set. The results show that they were almost similar. This may be attributed to the appropriate filtering of the features without any valid data and also eliminating the ones adjudged irrelevant predictors based on common sense (does not help explaining the outcome), thus avoided overfitting (picking up the noise).</p>
+<p>Next the three different models were checked against the validation data set to evaluate the out-of-sample error rate. Here also the random forest model proved to be the most accurate with an accuarcy of 98.8%. Since the models were trained with about 50% of the original training set, the expectation was that out-of-sample errors (on the validation data set) will be almost similar or worse than the test data set. The results show that they were almost similar. This may be attributed to the appropriate filtering of the features without any valid data and also eliminating the ones adjudged irrelevant predictors based on common sense (does not help explaining the outcome), which resulted in limiting effects of overfitting (picking up the noise).</p>
 <pre class="r"><code>confusionMatrix(predict(mod_rf, validation), validation$classe)
 confusionMatrix(predict(mod_lda, validation), validation$classe)
 confusionMatrix(predict(mod_rpart, validation), validation$classe)</code></pre>
