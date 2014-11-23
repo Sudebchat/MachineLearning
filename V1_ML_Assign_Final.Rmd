@@ -1,0 +1,142 @@
+---
+title: "ML_Assignment"
+output: html_document
+---
+
+```{r, echo=F}
+options(width = 100)
+```
+
+# Practical Machine Learning Assignment
+
+## Executive summary
+
+ In this project, the data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants are used. The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+ The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+ Three different (applying different training methods) models were developed, and the model using random forest was found to be most accurate (lowest out-of-sample error). The final prediction using this model on the 20 test cases were all correct. 
+
+## Preliminary elimination of features for modeling
+
+  The test data set pm-testing.csv was analyzed first. The analysis showed that out of the 160 features (variables) in the test data set, for 100 features no data are available, so these need to be eliminated from the training data set before training any model.
+  Also out of the remaining 60 features for which data were available, judging from purpose of the model the features "X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "new_window" & "num_window" were also eliminated from the predictor list in the model. 
+  Based on the elimination strategy, the training and test data sets were pruned to keep only the relevant features (in all 54) for training and final prediction for submission of the assignment.
+
+```{r attribute_selection, echo=TRUE, cache=TRUE}
+testing <- read.csv("./pml-testing.csv")   # Test data for prediction submission
+   # checking for NA variables or variables with no data
+slct <- which(sapply(testing, function(x)all(!is.na(x))))
+   # creating the test data only with populated variables
+test_sel <- testing[,slct]
+   # removing variables deemed not relevant as predictors
+test_sel <- test_sel[,c(-1,-2,-3,-4,-6,-7)]
+
+training <- read.csv("./pml-training.csv") # Training data for creating predictive model
+train_sel <- training[,slct]  # selecting only the populated variables
+train_sel <- train_sel[,c(-1,-2,-3,-4,-6,-7)]  # removing variables deemed not relevant as predictors
+```
+
+## Creating Data set for cross-validation
+
+Simple cross-validation was implemented in this model by first dividing the training data into a 70:30 split, where 30% of the training data is separated into a validation set, to check the out-of-sample error for the final model. Also a cursory check (see plot in Appendix) of the data suggests that it contains time series data for events to be classified. So the data split was made based on the variable cvtd_timestamp to make sure that we capature the full cycle of data for a particular event (manner of dumbell exercise) on a particular day, both for training and validation data sets. The remaining 70% of the training set was again split into training and test sets using a 70:30 ratio to be used for model building.
+
+```{r cross_validation_data, echo=TRUE, cache=TRUE}
+library(lattice)
+library(ggplot2)
+library(AppliedPredictiveModeling)
+library(caret)
+set.seed(5493)
+inBuild <- createDataPartition(y=train_sel$cvtd_timestamp,
+                               p=0.7, list=FALSE)
+validation <- train_sel[-inBuild,]   # for out-of-sample error check
+buildData  <- train_sel[inBuild,]    # data to train and test the model
+inTrain <- createDataPartition(y=buildData$cvtd_timestamp,
+                               p=0.7, list=FALSE)
+trainClasse <- buildData[inTrain,]   # Data to train the model
+testClasse  <- buildData[-inTrain,]  # Data for testing the model
+```
+
+## Developing three different models 
+
+Using the training data three different models were created. Since the problem here is a classification problem with more than two classes to predict, the methods chosen were rpart, random forest, and lda as shown in the following R code. For the rpart model tuning length of 50 was used. For the random forest model, a cross-validation training control method was selected. For the list discriminant analysis (lda) model the default parameters of the caret package were used. The accuracy on the training set for the three different models were 90.6% (rpart), 98.47% (rf), and 68.54% (lda) respectively. 
+
+```{r models, echo=TRUE, cache=TRUE, results="hide"}
+library(e1071)
+library(rpart)
+library(randomForest)
+library(MASS)
+
+set.seed(3939)
+  # creating the three models
+mod_rpart <- train(classe ~ ., method="rpart", data=trainClasse[,-1],
+              tuneLength=50)              
+mod_rf    <- train(classe ~ ., method="rf", data=trainClasse[,-1],
+              trControl = trainControl(method="cv"), number=3)
+mod_lda   <- train(classe ~ ., method="lda", data=trainClasse[,-1])
+
+dim(trainClasse[,-1])
+mod_rpart
+pred_rf    <- predict(mod_rf, testClasse)
+pred_rpart <- predict(mod_rpart, testClasse)
+pred_lda   <- predict(mod_lda, testClasse)
+
+   # comparing the accuracy of the three models
+confusionMatrix(pred_rf, testClasse$classe)
+confusionMatrix(pred_rpart, testClasse$classe)
+confusionMatrix(pred_lda, testClasse$classe)
+```
+
+## Checking the out-of-sample error rate
+
+Next the three different models were checked against the validation data set to evaluate the out-of-sample error rate. Here also the random forest model proved to be the most accurate with an accuarcy of 98.8%. Since the models were trained with about 50% of the original training set, the expectation was that out-of-sample errors (on the validation data set) will be almost similar or worse than the test data set. The results show that they were almost similar. This may be attributed to the appropriate filtering of the features without any valid data and also eliminating the ones adjudged irrelevant predictors based on common sense (does not help explaining the outcome), thus avoided overfitting (picking up the noise). 
+
+```{r out-of-sample-error, echo=TRUE, cache=TRUE, results="hide"}
+confusionMatrix(predict(mod_rf, validation), validation$classe)
+confusionMatrix(predict(mod_lda, validation), validation$classe)
+confusionMatrix(predict(mod_rpart, validation), validation$classe)
+```
+
+## Selecting the model to be used for final prediction (20 test cases)
+
+Based on the above findings the random forest model was chosen as the model to be used for final prediction using the 20 test data points in pml_testing.csv file. All the 20 points were correctly predicted by this model.
+
+```{r final_prediction, results="hide"}
+   # Final prediction with the test data (pml-testing.csv) for
+   # submission
+predTest <- predict(mod_rf, test_sel)
+```
+
+The predicted results were then appropriately formatted in separate files for submission using the following function.
+
+```{r write_files, results="hide"}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(predTest)
+```
+
+## Appendix
+
+### Sample plot of time series data (roll_arm feature)
+
+```{r appendix_sample_plot, echo=TRUE, cache=TRUE} 
+plot(train_sel$roll_arm, cex=0.1, col=train_sel$classe)
+```
+
+### Accuracy of the models based on the sample test data (21% of original training data)
+
+```{r appendix_test_accuracy, echo=TRUE, cache=TRUE} 
+confusionMatrix(pred_rf, testClasse$classe)
+confusionMatrix(pred_rpart, testClasse$classe)
+confusionMatrix(pred_lda, testClasse$classe)
+```
+
+### Accuracy of the models based on the validation (out-of-sample) test data (30% of original training data)
+```{r appendix_out-of-sample-error, echo=TRUE, cache=TRUE}
+confusionMatrix(predict(mod_rf, validation), validation$classe)
+confusionMatrix(predict(mod_lda, validation), validation$classe)
+confusionMatrix(predict(mod_rpart, validation), validation$classe)
+```
